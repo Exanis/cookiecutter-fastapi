@@ -86,3 +86,9 @@ We are not using Alembic, neither SQLAlchemy, in this cookiecutter. We are using
 The reason for this choice is that while SQLAlchemy is a real good ORM, as any ORM built for multiple databases support, it is not very good at handling specificities of each database. For example, it is not possible to use the `RETURNING` clause in PostgreSQL with SQLAlchemy. This is a very useful clause that allows you to get the inserted row in the same query as the insert. This is not possible with SQLAlchemy. This is why we are not using it.
 
 This cookiecutter is made to be used with PostgreSQL. If you want to use another database, you will have to change the `migrations` folder and the `tools/migrate.py` file.
+
+### Healthcheck
+
+The default router included in the fastapi app is the healthcheck router. It is meant both as a healthcheck endpoint and as a documentation endpoint. However, this healthcheck is not used in the Dockerfile, you will have to add it yourself if you want to.
+
+The reason behind this choice is that using an healthcheck in Docker require to install curl (or create a custom equivalent in python). However, this lead to an increase in the image's size that may be unwanted (especially if you are doing the healthcheck in a Kubernetes cluster).
