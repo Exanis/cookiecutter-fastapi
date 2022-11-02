@@ -1,0 +1,12 @@
+{
+    "repo_name": "myproject",
+    "description": "A wonderful project created using cookiecutter-fastapi",
+    "full_name": "John Doe",
+    "email": "john.doe@nowhere.org",
+    "registry": "ghcr.io",
+    "generate_changelog": ["yes", "no"],
+    "update_version_on_release": ["yes", "no"],
+    "use_openapi": ["yes", "no"],
+    "use_docs": ["yes", "no"],
+    "use_redoc": ["yes", "no"]
+}

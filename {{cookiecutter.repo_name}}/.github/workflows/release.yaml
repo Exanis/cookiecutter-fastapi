@@ -1,0 +1,85 @@
+name: "Build docker container for release"
+
+on:
+  push:
+    tags:
+      - v*
+
+env:
+  REGISTRY: {{cookiecutter.registry}}
+  IMAGE_NAME: {% raw %}${{ github.repository }}{% endraw %}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          {% if cookiecutter.generate_changelog == "yes" %}
+          fetch-depth: 0
+          {% endif %}
+          {% if cookiecutter.update_version_on_release == "yes" or cookiecutter.generate_changelog == "yes" %}
+          token: {% raw %}${{ secrets.PUBLISH_TOKEN }}{% endraw %}
+          {% endif %}
+      - uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: {% raw %}${{ env.REGISTRY }}{% endraw %}
+          username: {% raw %}${{ github.actor }}{% endraw %}
+          password: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: {% raw %}${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}{% endraw %}
+          tags: |
+            type=semver,pattern={% raw %}{{version}}{% endraw %}
+      {% if cookiecutter.update_version_on_release == "yes" %}
+      - name: Change version
+        run: |
+          sed -i 's/^version = ".*"$/version = "{% raw %}${{ steps.meta.outputs.version }}{% endraw %}"/g' pyproject.toml
+          sed -i 's/^__version__ = ".*"$/__version__ = "{% raw %}${{ steps.meta.outputs.version }}{% endraw %}"/g' server/__init__.py
+      {% endif %}
+      {% if cookiecutter.generate_changelog == "yes" %}
+      - uses: actions/setup-python@v4
+        name: Setup python for changelog
+        with:
+          python-version: 3.9
+      - run: pip install git+https://github.com/kapsner/auto-changelog.git
+      - run: auto-changelog -t "{{ cookiecutter.repo_name }}"
+      {% endif %}
+      {% if cookiecutter.generate_changelog == "yes" or cookiecutter.update_version_on_release == "yes" %}
+      - name: Commit everything
+        id: cpr
+        uses: peter-evans/create-pull-request@v4.1.1
+        with:
+          commit-message: "docs(version): update version to {% raw %}${{ steps.meta.outputs.version }}{% endraw %}"
+          add-paths: |
+            {% if cookiecutter.update_version_on_release == "yes" %}
+            pyproject.toml
+            {{cookiecutter.repo_name}}/__init__.py
+            {% endif %}
+            {% if cookiecutter.generate_changelog == "yes" %}
+            CHANGELOG.md
+            {% endif %}
+          branch: RELEASE-{% raw %}${{ steps.meta.outputs.version }}{% endraw %}
+          title: "docs(version): update version to {% raw %}${{ steps.meta.outputs.version }}{% endraw %}"
+          token: {% raw %}${{ secrets.PUBLISH_TOKEN }}{% endraw %}
+          labels: Release
+          base: main
+      - name: Enable Pull Request Automerge
+        if: steps.cpr.outputs.pull-request-operation == 'created'
+        uses: peter-evans/enable-pull-request-automerge@v2
+        with:
+          token: {% raw %}${{ secrets.PUBLISH_TOKEN }}{% endraw %}
+          pull-request-number: {% raw %}${{ steps.cpr.outputs.pull-request-number }}{% endraw %}
+      {% endif %}
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: {% raw %}${{ github.event_name != 'pull_request' }}{% endraw %}
+          tags: {% raw %}${{ steps.meta.outputs.tags }}{% endraw %}
+          labels: {% raw %}${{ steps.meta.outputs.labels }}{% endraw %}
